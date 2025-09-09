@@ -1,0 +1,1123 @@
+---
+title: "BigBNBBrainZ_Report"
+author: 'Team 4: Big BNB Brainz'
+date: "2025-05-05"
+output: word_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, include=FALSE}
+#install.packages("corrplot")
+library(tidyverse)
+library(dplyr)
+library(corrplot)
+library(lubridate)
+#install.packages("plotly")
+library(plotly)
+```
+
+The libraries used for this report are:
+
+```{r Load Libraries}
+dfP <- read.csv("C:/Users/Abhig/OneDrive/Desktop/Big Data files/FinalizedCleanParis.csv")
+
+OG_df <- read.csv("C:/Users/Abhig/OneDrive/Desktop/Big Data files/ButteMontmarteParisAirbnb.csv")
+```
+
+dfP is the FinalizedCleanParis.csv which was finalized together\
+OG_df is the original, raw data for all Butte Montmartre Paris Airbnb
+observations
+
+The first thing to do is deal with the dates and fix the formats
+
+```{r Structure of Data}
+# dim(dfP) # 114,514 observations and 63 variables
+# head(dfP)
+# glimpse(dfP)
+dfP <- dfP %>%
+  mutate(
+    date = as.Date(date),           # Convert date column to Date type
+    host_since = as.Date(host_since) # Convert host_since column to Date type
+  )
+dfP$month <- month(dfP$date)
+dfP$year <- year(dfP$date)
+dfP$day <- day(dfP$date)
+```
+
+[Problem Statement:]{.underline} Given the current trends and seasonal
+dynamics of the Butte Montmartre vacation rental market, this report
+aims to identify the property types, special features, and operational
+strategies that yield the highest return on investment and high booking
+rates. Specifically, it helps potential investors understand what unique
+characteristics and effective operational practices can enhance guest
+satisfaction and drive superior performance among the current Airbnb
+listings.
+
+#### **Market Research Insights**
+
+4,599 available listings, 64% licensed & strict regulations (Note: New
+limit to 90 nights for short term rentals effective February 2025)
+Optimize profitability by targeting weekends and offering premium
+amenities Important local events include Montmartre Harvest Festival
+(Oct. 5 to 15) and Paris Fashion Week (Sept. 23 to Oct. 7) drive demand
+surges and influence seasonal fluctuations. Occupancy rate peaks in
+September followed by October, with a low in December through February.
+
+Key Attractions:\
+- Sacre-Coeur Basilica\
+- Place du Tertre\
+- Espace Dali\
+- Montmartre Vineyards\
+- Lapin Agile Cabaret\
+- Rue Lepic & Rue des Abbesses\
+- Montmartre Museum\
+- Hidden Gardens\
+- Artist Landmarks (Picasso, Van Gogh, Claude Monet, Edgar Degas,
+Pierre-Auguste Renoir)\
+- Metro/Transit
+
+## [**Data Analysis**]{.underline}**:**
+
+#### **Market Analysis**
+
+How many listings are there and what percentage of the properties are
+high booking?
+
+```{r}
+dfP %>% 
+  mutate(unique_ids = n_distinct(id)) %>% 
+  filter(high_booking==1) %>% 
+  mutate(hb_ids = n_distinct(id),
+         hb_pct = (hb_ids/unique_ids*100)) %>% 
+  select(unique_ids, hb_ids, hb_pct) %>% 
+  head(1)
+
+```
+
+What is the distribution of \# listings by number of bedrooms,
+accommodates, room type and property type?
+
+```{r}
+ggplot(dfP, aes(x = factor(bedrooms))) +
+  geom_bar(fill = "skyblue") +
+  labs(
+    x = "Number of Bedrooms",
+    y = "Number of Listings",
+    title = "Distribution of Airbnb Listings by Number of Bedrooms"
+  ) +
+  theme_minimal()
+ggplot(dfP, aes(x = factor(accommodates))) +
+  geom_bar(fill = "skyblue") +
+  labs(
+    x = "Accommodation Amount",
+    y = "Number of Listings",
+    title = "Distribution of Airbnb Listings by Accommodates"
+  ) +
+  theme_minimal()
+ggplot(dfP, aes(x = factor(room_type))) +
+  geom_bar(fill = "skyblue") +
+  labs(
+    x = "Room Type",
+    y = "Number of Listings",
+    title = "Distribution of Airbnb Listings by Room Type"
+  ) +
+  theme_minimal()
+ggplot(dfP, aes(x = factor(property_type))) +
+  geom_bar(fill = "skyblue") +
+  labs(
+    x = "Property Type",
+    y = "Number of Listings",
+    title = "Distribution of Airbnb Listings by Property Type"
+  ) +
+  theme_minimal()
+```
+
+Are there any high booked listings with the maximum nights capped at 90
+and/or are licensed?
+
+```{r}
+dfP %>%
+  filter(high_booking == 1 & (maximum_nights <= 90 | requires_license == 1)) %>%
+  summarise(num_id_either = n_distinct(id))
+dfP %>%
+  filter(high_booking == 1 & maximum_nights <= 90 & requires_license == 1) %>%
+  summarise(num_id_both = n_distinct(id))
+```
+
+What percentage of listings are licensed, and are they highly booked?/
+82% of all airbnb property listings in Butte Montmartre are licensed and
+47% of the licensed airbnb's are highly booked.
+
+```{r}
+dfP %>% 
+  mutate(num_listings=n_distinct(id)) %>% 
+  filter(requires_license==1) %>% 
+  mutate(licensed = n_distinct(id),
+         pct_licensed = licensed/num_listings*100) %>% 
+  filter(high_booking==1) %>% 
+  mutate(hb_lic = n_distinct(id),
+         pct_lic_hb = hb_lic/licensed*100) %>% 
+  select(pct_licensed, pct_lic_hb) %>% 
+  head(1)
+```
+
+Look at the percentage of highly booked listings during Fashion Week or
+Harvest Festival. Paris Fashion Week occurs from around September 23 to
+October 7 each year. Butte Montmartre Harvest Festival occurs from
+around October 5 to October 15 each year. Around 48% of the airbnb's are
+highly booked during the period from September 23 to October 15.
+
+```{r}
+dfP_event <- dfP %>%
+  filter(
+    # Fashion Week: September 23 to October 7
+    # Harvest Festival: October 5 to October 15
+    (month == 9 & day >= 23) |
+    (month == 10 & day <= 15)  )
+
+# Calculate percentage of highly booked listings during event dates
+pct_hb_events <- mean(dfP_event$high_booking == 1) * 100
+pct_hb_events
+
+```
+
+```{r Avg Price then Price Per Month }
+dfP %>% 
+  group_by(id) %>% 
+  mutate(avg_bnbprice = mean(price)) %>% 
+  select(id, price, avg_bnbprice) %>% 
+  summarise(avg_price_ovrll = mean(avg_bnbprice))
+#  summary()
+```
+
+```{r pct high book listings over time}
+yearly_stats <- dfP %>%
+  group_by(year) %>%
+  summarise(
+    total_unique_ids = n_distinct(id),
+    hb_ids = n_distinct(id[high_booking == 1])
+  ) %>%
+  mutate(hb_pct = (hb_ids / total_unique_ids) * 100)
+
+# Optional: view the summarized data
+print(yearly_stats)
+
+# Step 5: Plot the percentage over years
+ggplot(yearly_stats, aes(x = year, y = hb_pct)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Percentage of Highly Booked Listings Over Years",
+       x = "Year",
+       y = "Percentage of Highly Booked Listings") +
+  theme_minimal()
+```
+
+```{r}
+
+```
+
+```{r}
+# 1. Filter for non-outliers
+non_outliers <- dfP %>%
+  filter(price < 1000) 
+
+# 2. Group by year, month, and booking status, then summarize
+monthly_median <- dfP %>%
+  select(id, high_booking, price, date) %>% 
+  filter(price < 1000) %>%
+  mutate(year = year(date), month = month(date)) %>%
+  group_by(year, month, high_booking) %>%
+  summarise(median_price = median(price)) %>%
+  ungroup()
+head(monthly_median)
+
+# Get list of years
+years <- sort(unique(monthly_median$year))
+
+# Create individual plot objects for each year
+plots_list <- list()
+
+for (yr in years) {
+  data_year <- filter(monthly_median, year == yr)
+  
+  p_year <- plot_ly(data_year) %>%
+    add_trace(
+      x = ~date,
+      y = ~median_price,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'Not High Booked',
+      line = list(color = 'orange'),
+      color = I('orange'),
+      split = ~high_booking
+    )
+  
+  p_year <- p_year %>%
+    add_trace(
+      data = filter(data_year, high_booking == 1),
+      x = ~date,
+      y = ~median_price,
+      type = 'scatter',
+      mode = 'lines+markers',
+      name = 'High Booked',
+      line = list(color = 'green'),
+      split = ~high_booking
+    )
+
+  # Save plot with a title for that year
+  p_year <- p_year %>% layout(title = paste("Year:", yr))
+  
+  plots_list[[as.character(yr)]] <- p_year
+}
+
+# Combine all year plots into a subplot with one row per year
+final_plot <- subplot(plots_list, nrows = length(years), shareX = TRUE, shareY = TRUE) %>%
+  layout(title = "Median Monthly Price by Booking Status per Year")
+
+final_plot
+```
+
+There are 6 observations that have a price of over 5000 and none of them
+are highly booked. / Airbnb listing id's 278 and 326 are the only
+listings that are highly booked and are priced over 2000. Each
+observation was priced at exactly 5000. /
+
+Look at high booking percentages during periods of time that the dollar
+is weaker than the Euro and vice versa.
+
+```{r}
+
+```
+
+What is the trend in cancellation policies for listings with and without
+high booking rates?
+
+```{r}
+
+```
+
+#### **Property Insights**
+
+[Text Analysis:]{.underline}
+
+What special features or amenities are commonly seen in HB properties?
+balcony/terrace w view, garden, courtyard, AC, stairs/elevator,
+cleanliness, noise, pets, check-in and breakfast.
+
+```{r}
+
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+
+# Filter to high-booking listings from dfP
+df_hb <- OG_df %>%
+  filter(high_booking == 1)
+
+# Combine text fields
+df_hb$text_combined <- paste(
+  df_hb$description,
+  df_hb$summary,
+  df_hb$neighborhood_overview,
+  df_hb$transit,
+  sep = " "
+)
+df_hb$text_combined <- tolower(df_hb$text_combined)
+
+# Define French search terms and matching English display names
+search_terms <- c(
+  "sacré-coeur", "moulin rouge", "place du tertre", "rue lepic",
+  "rue des abbesses", "montmartre cemetery", "lamarck", "pigalle",
+  "gare du nord", "le mur des je t'aime", "café des 2 moulins",
+  "metro", "funiculaire", "basilica", "artist square"
+)
+
+display_names <- c(
+  "Sacré-Cœur", "Moulin Rouge", "Place du Tertre", "Rue Lepic",
+  "Rue des Abbesses", "Montmartre Cemetery", "Lamarck", "Pigalle",
+  "Gare du Nord", "I Love You Wall", "Café des 2 Moulins",
+  "Metro", "Funiculaire", "Basilica", "Artist Square"
+)
+
+# Create flags for mentions
+for (i in seq_along(search_terms)) {
+  col <- str_replace_all(search_terms[i], " ", "_")
+  df_hb[[col]] <- str_detect(df_hb$text_combined, search_terms[i])
+}
+
+# Count mentions
+place_counts <- df_hb %>%
+  select(all_of(str_replace_all(search_terms, " ", "_"))) %>%
+  summarise_all(sum) %>%
+  pivot_longer(cols = everything(), names_to = "PlaceKey", values_to = "Count") %>%
+  mutate(Place = display_names[match(PlaceKey, str_replace_all(search_terms, " ", "_"))]) %>%
+  arrange(desc(Count))
+
+# Plot
+
+ggplot(place_counts, aes(x = reorder(Place, Count), y = Count, fill = Place)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  geom_text(aes(label = Count), hjust = -0.1, size = 3.5) +
+  labs(
+    title = "Mentions of Famous Montmartre Places in High-Booking Listings",
+    x = "Place",
+    y = "Number of mentions in high bookings"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+   plot.margin = ggplot2::margin(10, 30, 10, 10, unit = "pt")
+
+  ) +
+  expand_limits(y = max(place_counts$Count) * 1.1)
+```
+
+What locations near which attractions are the most significant and
+desirable?
+
+```{r}
+
+library(stringr)
+library(leaflet)
+
+df_hb <- OG_df %>%
+  filter(high_booking == 1, !is.na(latitude), !is.na(longitude))
+
+# Define famous attractions and their coordinates
+attractions <- data.frame(
+  name = c("Sacré-Cœur", "Moulin Rouge", "Place du Tertre", "Pigalle", 
+           "Lamarck-Caulaincourt", "I Love You Wall"),
+  lat = c(48.8867, 48.8841, 48.8862, 48.8820, 48.8904, 48.8840),
+  lon = c(2.3431, 2.3324, 2.3399, 2.3331, 2.3370, 2.3333)
+)
+
+# Create leaflet map
+map <- leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  
+  # Add high-booking properties with lower opacity and clustering
+  addCircleMarkers(
+    data = df_hb,
+    lng = ~longitude, lat = ~latitude,
+    color = "blue", fillOpacity = 0.4, opacity = 0.5,
+    radius = 2,
+    label = ~paste("Listing:", name),
+    clusterOptions = markerClusterOptions()
+  ) %>%
+  
+  # Add attraction markers with popups
+  addMarkers(
+    data = attractions,
+    lng = ~lon, lat = ~lat,
+    popup = ~name,
+    label = ~name,
+    icon = icons(
+      iconUrl = "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+      iconWidth = 25, iconHeight = 25
+    )
+  )
+
+map
+
+
+
+```
+
+Sentiment Analysis of Key Features in High-Booking Listings
+
+
+
+```{r}
+
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(textdata)
+
+# Prepare combined text column
+ OG_df$text_combined <- paste(
+  OG_df$description,
+  OG_df$summary,
+  OG_df$neighborhood_overview,
+  OG_df$transit,
+  sep = " "
+) %>% tolower()
+
+# Filter high booking listings
+df_high <-  OG_df %>% filter(high_booking == 1)
+
+# Tokenize and clean text
+data("stop_words")
+high_tokens <- df_high %>%
+  select(text_combined) %>%
+  unnest_tokens(word, text_combined) %>%
+  anti_join(stop_words, by = "word")
+
+# Load NRC sentiment lexicon and join
+sentiments_nrc <- get_sentiments("nrc")
+
+high_sentiment <- high_tokens %>%
+  inner_join(sentiments_nrc, by = "word")
+
+# Focus on Airbnb features of interest
+feature_words <- c("clean", "checkin", "balcony", "garden", "noise", 
+                   "parking", "courtyard", "pets", "ac", "breakfast", "biking")
+
+feature_sentiment <- high_sentiment %>%
+  filter(word %in% feature_words) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  group_by(word) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ungroup()
+
+# Plot stacked sentiment bar chart
+ggplot(feature_sentiment, aes(x = reorder(word, -percent), y = percent, fill = sentiment)) +
+  geom_col(position = "stack") +
+  labs(
+    title = "Sentiment Distribution of Features in High Booking Listings",
+    x = "Feature Word",
+    y = "Sentiment (%)"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+```
+This chart shows how guests feel about certain features in high booking Airbnb listings. People talk about "breakfast" in a completely positive way, which means they really like it. On the other hand, "noise" is mentioned only in a negative way, so it's something that bothers guests. The word "garden" brings out both joy and positive feelings, showing it's something people enjoy. "Clean" is connected to trust, joy, and positivity, which means it's very important for guests. Overall, this helps us understand what features make guests happy and what might turn them away.
+
+
+Which features show the biggest difference between high-booking and non-high-booking listings, and what might that tell us about what guests actually value?
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+# Combine text fields for keyword search
+OG_df <- OG_df %>%
+  mutate(text_combined = paste(description, summary, neighborhood_overview, transit, sep = " ") %>% tolower())
+
+# Extract binary features using str_detect
+OG_df <- OG_df %>%
+  mutate(
+    ac = str_detect(text_combined, "ac|air conditioning|climatisation"),
+    stairs_elevator = str_detect(text_combined, "stairs|elevator|lift"),
+    noise = str_detect(text_combined, "noise|quiet|noisy|loud|soundproof"),
+    clean = str_detect(text_combined, "clean|dirty|hygiene"),
+    check_in = str_detect(text_combined, "check-in|self check-in|arrival"),
+    pets = str_detect(text_combined, "pet|dog|cat|pets allowed|no pets"),
+    breakfast = str_detect(text_combined, "breakfast|morning meal"),
+    biking = str_detect(text_combined, "bike|bicycle|cycling"),
+    parking = str_detect(text_combined, "parking|garage|car park|street parking"),
+    balcony = str_detect(text_combined, "balcony|terrace|veranda|roof deck"),
+    garden = str_detect(text_combined, "garden|green space|outdoor area|lawn"),
+    courtyard = str_detect(text_combined, "courtyard|patio|shared courtyard|inner yard")
+  )
+
+# Define features and clean missing values
+features <- c("ac", "balcony", "biking", "breakfast", "check_in",
+              "clean", "courtyard", "garden", "noise",
+              "parking", "pets", "stairs_elevator")
+
+df_clean <- OG_df %>%
+  filter(!is.na(high_booking)) %>%
+  mutate(across(all_of(features), ~ ifelse(is.na(.), 0, .)))  # convert to 0/1 if needed
+
+# Reshape and calculate percentages
+compare_df <- df_clean %>%
+  select(high_booking, all_of(features)) %>%
+  pivot_longer(cols = -high_booking, names_to = "Feature", values_to = "HasFeature") %>%
+  filter(HasFeature == 1) %>%
+  group_by(Feature, high_booking) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  group_by(Feature) %>%
+  mutate(Percent = Count / sum(Count) * 100) %>%
+  ungroup()
+
+# Order by difference
+feature_order <- compare_df %>%
+  pivot_wider(names_from = high_booking, values_from = Percent, values_fill = 0) %>%
+  mutate(Diff = `1` - `0`) %>%
+  arrange(desc(Diff)) %>%
+  pull(Feature) %>%
+  unique()
+
+# Plot
+ggplot(compare_df, aes(x = factor(Feature, levels = feature_order),
+                       y = Percent,
+                       fill = factor(high_booking, labels = c("No", "Yes")))) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Comparison of Features in High vs Non-High Booking Listings",
+    x = "Feature",
+    y = "Percentage of Listings with Feature",
+    fill = "High Booking"
+  ) +
+  scale_fill_manual(values = c("No" = "#e74c3c", "Yes" = "#2ecc71")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+
+
+```
+Features like clean, check-in, and AC show a more balanced distribution, suggesting they are commonly present in successful listings. In contrast, features like parking, garden, and courtyard appear more frequently in listings with lower bookings, indicating they may not strongly influence booking success in this area. Overall, the results help highlight which features are more associated with high performance and which may be overrepresented in less successful properties.
+
+
+What special features, amenities, or other property characteristics are
+significant at predicting high booking?
+
+```{r Interprettable Predictive Model}
+
+library(randomForest)
+library(caret)
+
+
+df_filtered <- OG_df %>%
+  filter(!is.na(high_booking), !is.na(description) | !is.na(amenities)) %>%
+  mutate(
+    high_booking = as.factor(high_booking),
+    description = tolower(as.character(description)),
+    amenities = tolower(as.character(amenities))
+  )
+
+keywords <- c("backyard", "garden", "view", "balcony", "terrace", 
+              "wifi", "ac", "parking", "stairs", "clean", "pet", "elevator", "check in", "breakfast")
+
+# Create binary features
+for (word in keywords) {
+  col <- gsub(" ", "_", tolower(word))
+  df_filtered[[col]] <- ifelse(
+    grepl(word, df_filtered$description, fixed = TRUE) |
+    grepl(word, df_filtered$amenities, fixed = TRUE),
+    1, 0
+  )
+}
+
+# Include structured features
+extra_features <- c("accommodates", "bedrooms", "bathrooms", "beds", 
+                    "room_type", "host_is_superhost", "instant_bookable", "cancellation_policy","reviews_per_month","host_response_rate","host_acceptance_rate","review_scores_rating")
+
+# Build final dataset
+model_data <- df_filtered %>%
+  select(all_of(c("high_booking", gsub(" ", "_", keywords), extra_features))) %>%
+  na.omit()
+
+# One-hot encode categorical variables
+dummies <- dummyVars(high_booking ~ ., data = model_data)
+X <- predict(dummies, newdata = model_data) %>% as.data.frame()
+y <- model_data$high_booking
+
+# Split and train model
+set.seed(123)
+train_index <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_index, ]
+X_test <- X[-train_index, ]
+y_train <- y[train_index]
+y_test <- y[-train_index]
+
+rf_model <- randomForest(x = X_train, y = y_train, ntree = 100, importance = TRUE)
+pred_probs <- predict(rf_model, X_test, type = "prob")[, 2]  # get probabilities for class 1
+pred <- ifelse(pred_probs > 0.6, 1, 0)  # apply custom threshold (0.6)
+pred <- factor(pred, levels = c(0, 1))
+y_test <- factor(y_test, levels = c(0, 1))
+
+# Now compute confusion matrix
+confusionMatrix(pred, y_test)
+confusionMatrix(pred, y_test)
+
+# Show feature importance
+importance_df <- data.frame(
+  Feature = rownames(importance(rf_model)),
+  Importance = importance(rf_model)[, 1]
+) %>% arrange(desc(Importance))
+
+head(importance_df, 20)
+
+library(ggplot2)
+
+ggplot(importance_df[1:15, ], aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 15 Most Important Features (Random Forest)",
+    x = "Feature",
+    y = "Importance"
+  ) +
+  theme_minimal()
+```
+
+#### **Pricing Strategies**
+
+Average & Median Price for all high booking observations
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Ensure booking status is a factor
+dfP$high_booking <- factor(dfP$high_booking, labels = c("Not Highly Booked", "Highly Booked"))
+
+# Calculate average and median prices by booking status
+price_summary <- dfP %>%
+  group_by(high_booking) %>%
+  summarise(
+    avg_price = mean(price, na.rm = TRUE),
+    med_price = median(price, na.rm = TRUE)
+  )
+
+# Reshape to long format
+price_long <- price_summary %>%
+  pivot_longer(cols = c(avg_price, med_price),
+               names_to = "statistic", values_to = "price")
+
+# Plot with value labels
+ggplot(price_long, aes(x = high_booking, y = price, fill = statistic)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_text(aes(label = round(price, 1)),
+            position = position_dodge(width = 0.7),
+            vjust = -0.5, size = 4) +
+  labs(
+    title = "Average vs Median Price by Booking Status",
+    x = "Booking Status",
+    y = "Price",
+    fill = "Statistic"
+  ) +
+  scale_fill_manual(values = c("skyblue", "orange")) +
+  theme_minimal()
+
+```
+
+Highly booked properties charge less on average than those that are not
+highly booked.
+
+This suggests that affordable pricing contributes to higher booking
+rates.
+
+Not highly booked listings may be overpriced, which could explain why
+they don’t get booked as often.
+
+Median prices are lower than averages in both groups, meaning there are
+some price outliers pulling the average up (e.g., luxury listings).
+
+To maximize bookings, many successful hosts seem to price competitively,
+keeping rates within a range that attracts more guests — even if that
+means earning less per night.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Ensure 'date' column is in Date format
+dfP$date <- as.Date(dfP$date)
+
+# Get the first observation for each listing
+first_obs <- dfP %>%
+  group_by(id) %>%
+  arrange(date) %>%
+  slice(1) %>%
+  ungroup()
+
+# Calculate average and median price
+avg_price <- mean(first_obs$price, na.rm = TRUE)
+med_price <- median(first_obs$price, na.rm = TRUE)
+
+# Create summary dataframe
+summary_df <- data.frame(
+  Statistic = c("Average Price", "Median Price"),
+  Price = c(avg_price, med_price)
+)
+
+# Plot with value labels
+ggplot(summary_df, aes(x = Statistic, y = Price, fill = Statistic)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = round(Price, 1)), vjust = -0.5, size = 4) +
+  labs(
+    title = "Average & Median Price for First Observation of Each Airbnb",
+    y = "Price",
+    x = ""
+  ) +
+  scale_fill_manual(values = c("skyblue", "orange")) +
+  theme_minimal()
+
+
+```
+
+This bar chart shows the initial pricing of Airbnb listings
+specifically, the first recorded price for each property in your
+dataset. On average, properties were listed at around 115 when they
+first appeared. The median price the middle value was about 75. Most
+properties started with a price below €115, but a few very expensive
+listings pushed the average up. The large gap between the average and
+median suggests there are some price outliers (very high-priced
+listings) skewing the average. Typical hosts launch listings around €75.
+But a few hosts start with much higher prices, raising the average —
+possibly targeting luxury travelers or large groups.
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Make sure room_type is a factor
+dfP$room_type <- as.factor(dfP$room_type)
+
+# Calculate average and median prices by room type
+price_by_room <- dfP %>%
+  group_by(room_type) %>%
+  summarise(
+    avg_price = mean(price, na.rm = TRUE),
+    med_price = median(price, na.rm = TRUE)
+  )
+
+# Reshape for plotting
+price_long <- price_by_room %>%
+  pivot_longer(cols = c(avg_price, med_price),
+               names_to = "statistic", values_to = "price")
+
+# Plot with labels
+ggplot(price_long, aes(x = room_type, y = price, fill = statistic)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+  geom_text(aes(label = round(price, 1)),
+            position = position_dodge(width = 0.7),
+            vjust = -0.5, size = 4) +
+  labs(
+    title = "Average & Median Prices by Room Type",
+    x = "Room Type",
+    y = "Price (€)",
+    fill = "Statistic"
+  ) +
+  scale_fill_manual(values = c("skyblue", "orange")) +
+  theme_minimal()
+
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Convert date and extract month
+dfP$date <- as.Date(dfP$date)
+dfP$month <- format(dfP$date, "%m")
+
+# Filter for September and October
+peak_months <- dfP %>% 
+  filter(month %in% c("09", "10"))
+
+# Calculate average and median price
+avg_price_peak <- mean(peak_months$price, na.rm = TRUE)
+med_price_peak <- median(peak_months$price, na.rm = TRUE)
+
+# Summary dataframe
+summary_peak <- data.frame(
+  Statistic = c("Average Price", "Median Price"),
+  Price = c(avg_price_peak, med_price_peak)
+)
+
+# Plot with value labels
+ggplot(summary_peak, aes(x = Statistic, y = Price, fill = Statistic)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = round(Price, 1)), vjust = -0.5, size = 4) +
+  labs(
+    title = "Average & Median Prices in September & October (Peak Months)",
+    y = "Price (€)",
+    x = ""
+  ) +
+  scale_fill_manual(values = c("skyblue", "orange")) +
+  theme_minimal()
+
+```
+
+Seasonality of prices for highly booked properties and not
+
+```{r Scatterplot avg price per listing overtime for HB props w trend line}
+# Load necessary libraries
+
+library(ggplot2)
+
+# Filter for highly booked properties
+highly_booked <- dfP %>%
+  filter(high_booking == 1)
+
+# Ensure date column is in Date format (if not already)
+highly_booked$date <- as.Date(highly_booked$date)
+
+# Aggregate average price per day
+avg_price_per_day <- highly_booked %>%
+  group_by(date) %>%
+  summarise(avg_price = mean(price, na.rm = TRUE))
+
+# Plot with scatter and trend line
+ggplot(avg_price_per_day, aes(x = date, y = avg_price)) +
+  geom_point(alpha = 0.4, color = "steelblue") +
+  geom_smooth(method = "loess", se = FALSE, color = "darkred") +
+  labs(
+    title = "Average Price per Listing Over Time (Highly Booked Properties)",
+    x = "Date",
+    y = "Average Price"
+  ) +
+  theme_minimal()
+
+```
+
+2015–2018: Prices were relatively stable or slightly declining.
+
+2019–2021: Prices began to rise gradually.
+
+2022–2023: There was a sharp increase, possibly due to post-COVID
+tourism recovery or inflation.
+
+2024: Prices seem to dip slightly, suggesting possible market
+adjustments.
+
+This suggests that highly booked listings tend to adjust prices over
+time, likely in response to demand, events, and economic shifts.
+
+```{r Scatterplot avg price per listing overtime for not HB props w trend line}
+# Filter for not highly booked properties
+not_highly_booked <- dfP %>%
+  filter(high_booking == 0)
+
+# Aggregate average price per date
+avg_price_per_day_nhb <- not_highly_booked %>%
+  group_by(date) %>%
+  summarise(avg_price = mean(price, na.rm = TRUE))
+
+# Create scatterplot with trend line
+ggplot(avg_price_per_day_nhb, aes(x = date, y = avg_price)) +
+  geom_point(alpha = 0.4, color = "orange") +
+  geom_smooth(method = "loess", se = FALSE, color = "red", size = 1.2) +
+  labs(
+    title = "Average Price per Listing Over Time (Not Highly Booked Properties)",
+    x = "Date",
+    y = "Average Price"
+  ) +
+  theme_minimal()
+
+```
+
+2015–2020: Prices increased slowly and steadily.
+
+2021 onward: Prices began to rise rapidly, especially during and after
+2022.
+
+Some listings were priced very high, but despite the high prices, these
+listings were not booked frequently.
+
+Many hosts with poorly booked listings have raised prices significantly
+in recent years—possibly overpricing, which may explain why these
+listings didn’t attract many guests.
+
+```{r Scatterplot avg price per listing given distance near landmark}
+# Price = Y; Distance from a Landmark (Any) = X; Color by High Booking then Property Type or Accommodates or SuperHost or Special Features
+
+# Load libraries
+library(ggplot2)
+library(dplyr)
+
+# Ensure high_booking is a factor for color labeling
+dfP$high_booking <- factor(dfP$high_booking, labels = c("Not Highly Booked", "Highly Booked"))
+
+# Scatterplot: Price vs Distance from Basilica
+ggplot(dfP, aes(x = basillica_dist, y = price)) +
+  geom_point(aes(color = high_booking, shape = as.factor(room_type)), alpha = 0.5) +
+  scale_color_manual(values = c("orange", "red")) +
+  labs(
+    title = "Price vs Distance from Basilica",
+    subtitle = "Colored by Booking Status, Shaped by Room Type",
+    x = "Distance from Basilica",
+    y = "Price",
+    color = "Booking Status",
+    shape = "Room Type"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+How might pricing strategies differ for properties near attractions?
+
+```{r Scatterplot of prices over time given range of distances to attractions}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+
+# Create distance bins
+dfP_dist <- dfP %>%
+  mutate(
+    basillica_dist_category = cut(
+      basillica_dist,
+      breaks = c(-Inf, 500, 1500, Inf),
+      labels = c("Near (0–500m)", "Mid (500–1500m)", "Far (>1500m)")
+    )
+  )
+
+# Aggregate average price per date and distance category
+avg_price_by_date_dist <- dfP_dist %>%
+  group_by(date, basillica_dist_category) %>%
+  summarise(avg_price = mean(price, na.rm = TRUE)) %>%
+  ungroup()
+
+# Plot
+ggplot(avg_price_by_date_dist, aes(x = date, y = avg_price, color = basillica_dist_category)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Average Price Over Time by Distance to Basilica",
+    x = "Date",
+    y = "Average Price",
+    color = "Distance to Basilica"
+  ) +
+  theme_minimal()
+
+
+```
+
+This line chart shows how the average Airbnb price in Paris has changed
+over time, based on how close properties are to the Basilica. Red Line –
+Near (0–500m) These listings are closest to the Basilica. They
+consistently charge the highest prices. Prices rose steadily over time,
+with a sharp jump after 2022.
+
+Green Line – Mid (500–1500m) Mid-range distance. Prices are lower than
+near listings but still increased significantly over time.
+
+Blue Line – Far (\>1500m) Farthest from the Basilica. These properties
+had lowest prices overall, but they too rose post-2021.
+
+#### **Investment Opportunities**
+
+Okay, based on our EDA, we recommend aiming for a property with \_\_\_
+special features or within \_\_\_\_ of a landmark (especially \_\_\_\_ -
+most significant) and to price it at \_\_\_ during \_\_\_ with minimum
+nights set at \_\_\_ and maximum set at \_\_\_.
+
+DAGs influencing high booking for special features and amentities
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+# Compute median price
+median_price <- median(dfP$price, na.rm = TRUE)
+
+# Filter listings with high rating and low price
+high_rating_low_booking <- dfP %>%
+  filter(review_scores_rating >= 90, price < median_price, high_booking == 0)
+
+high_rating_high_booking <- dfP %>%
+  filter(review_scores_rating >= 90, price < median_price, high_booking == 1)
+
+compare_df <- bind_rows(
+  high_rating_low_booking %>% mutate(group = "Low Booking"),
+  high_rating_high_booking %>% mutate(group = "High Booking")
+)
+
+# Plot
+ggplot(compare_df, aes(x = factor(instant_bookable), fill = group)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Booking status\n(High Rating & Low Price Listings)",
+    x = "Instant Bookable status (0 = No, 1 = Yes)",
+    y = "Number of Listings"
+  ) +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal()
+```
+
+#### **Operations Management**
+
+Response Rate, Acceptance Rate, Review Scores, Reviews per Month, etc.
+These things clearly must be maintained or achieved in order to receive
+superhost status and have an overall successful performance of your
+Airbnb.
+
+```{r}
+
+# Load libraries
+#install.packages("pdp")
+library(randomForest)
+library(ggplot2)
+library(dplyr)
+library(scales)
+
+# Select Operational variables
+kpi_df <- dfP %>%
+  select(high_booking,
+         host_response_rate,
+         host_acceptance_rate,
+         review_scores_rating,
+         reviews_per_month,
+         instant_bookable,
+         cancellation_policy,
+         host_identity_verified) %>%
+  na.omit()  
+
+# Convert high_booking to factor for classification
+kpi_df$high_booking <- as.factor(kpi_df$high_booking)
+
+# Train Random Forest model
+rf_model <- randomForest(high_booking ~ ., data = kpi_df, importance = TRUE, ntree = 100)
+
+library(pdp)
+
+pdp_plot <- partial(rf_model, pred.var = "host_response_rate", prob = TRUE)
+plot(pdp_plot, main = "Partial Dependence: Host Response Rate vs. High Booking")
+
+library(pdp)
+
+pdp_plot <- partial(rf_model, pred.var = "review_scores_rating", prob = TRUE)
+plot(pdp_plot, main = "Partial Dependence:  review scores rating vs. High Booking")
+
+
+```
+
+DAGs influencing high booking for response rates, acceptance rates,
+review scores, and reviews per month (response time, response rate,
+is_location_exact, accommodates, price, minimum nights, review scores,
+host_identity_verified, instant_bookable, cleaning_fee,
+cancellation_policy)
+
+```{r}
+
+```
+
+Logistic Regression Model (interpretable) using management type
+variables to predict high booking (what’s most important/significant)
+
+```{r}
+#str(dfP)
+model <- glm(
+  high_booking ~ as.factor(host_response_time) +
+                 host_response_rate +
+                 as.factor(is_location_exact) +
+                 accommodates +
+                 price +
+                 minimum_nights +
+                 review_scores_rating +
+                 as.factor(host_identity_verified) +
+                 as.factor(instant_bookable) +
+                 cleaning_fee +
+                 as.factor(cancellation_policy) +
+                 as.factor(property_type_numeric),
+  data = dfP,
+  family = binomial(link = "logit")
+)
+
+# View the model summary
+summary(model)
+```
+
+```{r}
+
+```
