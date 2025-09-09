@@ -17,14 +17,23 @@ We used **R (R Markdown), Python, and machine learning models** to study 5,900 l
 
 ## 🗂️ Repository Structure
 buttemonmnarte/
+
 ├── notebooks/
+
 │ └── XG_BOOST.Rmd # R Markdown analysis file
+
 ├── reports/
+
 │ └── deck/
+
 │ └── Paris_Airbnb_Butte_Montmartre.pdf # Final presentation
+
 ├── data/ # (placeholder: raw data not included)
+
 ├── README.md # Project documentation
+
 ├── LICENSE # License file (MIT recommended)
+
 └── .gitignore # Ignore unnecessary files
 
 
@@ -88,10 +97,10 @@ buttemonmnarte/
 
 👥 Team
 
+Abhigna Valambatla
+
 Kamala Priya Annavarapu
 
 Gokul Varatharasan
-
-Abhigna Valambatla
 
 Caleigh Patterson
