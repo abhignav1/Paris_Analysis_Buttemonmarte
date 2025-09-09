@@ -86,12 +86,6 @@ buttemonmnarte/
 
 ---
 
-## 🚀 How to Reproduce
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/<your-username>/buttemonmnarte.git
-   cd buttemonmnarte
-
 👥 Team
 
 Kamala Priya Annavarapu
