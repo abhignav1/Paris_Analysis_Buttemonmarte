@@ -15,7 +15,7 @@ We used **R (R Markdown), Python, and machine learning models** to study 5,900 l
 
 ---
 
-## 📂 Repository Structure (Visual)
+## 📂 Repository Structure
 
 ```mermaid
 flowchart TD
