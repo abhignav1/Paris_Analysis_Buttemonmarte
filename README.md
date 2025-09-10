@@ -15,28 +15,21 @@ We used **R (R Markdown), Python, and machine learning models** to study 5,900 l
 
 ---
 
-## 🗂️ Repository Structure
-buttemonmnarte/
+## 📂 Repository Structure (Visual)
 
-├── notebooks/
+```mermaid
+flowchart TD
+  A[buttemonmnarte] --> B[notebooks]
+  A --> C[reports]
+  A --> D[data]
+  A --> E[README.md]
+  A --> F[LICENSE]
+  A --> G[.gitignore]
 
-│ └── XG_BOOST.Rmd # R Markdown analysis file
+  B --> B1[XG_BOOST.Rmd]
 
-├── reports/
-
-│ └── deck/
-
-│ └── Paris_Airbnb_Butte_Montmartre.pdf # Final presentation
-
-├── data/ # (placeholder: raw data not included)
-
-├── README.md # Project documentation
-
-├── LICENSE # License file (MIT recommended)
-
-└── .gitignore # Ignore unnecessary files
-
-
+  C --> C1[deck]
+  C1 --> C11[Paris_Airbnb_Butte_Montmartre.pdf]
 ---
 
 ## 📊 Data
